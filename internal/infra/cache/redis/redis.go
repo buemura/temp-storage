@@ -17,12 +17,6 @@ func NewRedisCacheStorage(r *redis.Client) *RedisCacheStorage {
 	}
 }
 
-func (c *RedisCacheStorage) Connect() *redis.Client {
-	return redis.NewClient(&redis.Options{
-		Addr: "localhost:6379",
-	})
-}
-
 func (c *RedisCacheStorage) Close() error {
 	return c.r.Close()
 }
