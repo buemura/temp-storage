@@ -1,17 +1,16 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"path/filepath"
-	"time"
 
 	"github.com/buemura/temp-storage/internal/constants"
 	"github.com/buemura/temp-storage/internal/domain/file"
 	"github.com/buemura/temp-storage/internal/domain/session"
-	"github.com/buemura/temp-storage/internal/infra/cache"
+	"github.com/buemura/temp-storage/internal/infra/cache/redis"
 	"github.com/gin-gonic/gin"
+	r "github.com/redis/go-redis/v9"
 )
 
 type HttpResponse map[string]interface{}
@@ -25,9 +24,11 @@ func main() {
 }
 
 func createSession(c *gin.Context) {
-	client := cache.ConnectRedis()
+	cli := r.NewClient(&r.Options{
+		Addr: "localhost:6379",
+	})
+	client := redis.NewRedisCacheStorage(cli)
 	defer client.Close()
-	ctx := context.Background()
 
 	sess := session.NewSession(10, 10)
 	jsonBytes, err := json.Marshal(sess)
@@ -39,7 +40,7 @@ func createSession(c *gin.Context) {
 	}
 	sessStr := string(jsonBytes)
 
-	err = client.Set(ctx, "sessionId:"+sess.ID, sessStr, time.Duration(sess.TimeToLive)*time.Minute).Err()
+	err = client.Set("sessionId:"+sess.ID, sessStr, sess.TimeToLive)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, HttpResponse{
 			"error": err.Error(),
@@ -51,9 +52,11 @@ func createSession(c *gin.Context) {
 }
 
 func uploadFiles(c *gin.Context) {
-	client := cache.ConnectRedis()
+	cli := r.NewClient(&r.Options{
+		Addr: "localhost:6379",
+	})
+	client := redis.NewRedisCacheStorage(cli)
 	defer client.Close()
-	ctx := context.Background()
 
 	form, err := c.MultipartForm()
 	if err != nil {
@@ -66,17 +69,10 @@ func uploadFiles(c *gin.Context) {
 	sessionId := form.Value["sessionId"][0]
 	files := form.File["files"]
 
-	val, err := client.Get(ctx, "sessionId:"+sessionId).Result()
-	if err != nil {
-		if val == "" {
-			c.JSON(http.StatusNotFound, HttpResponse{
-				"error": session.SessionNotFoundError,
-			})
-			return
-		}
-
-		c.JSON(http.StatusInternalServerError, HttpResponse{
-			"error": err.Error(),
+	val := client.Get("sessionId:" + sessionId)
+	if val == "" {
+		c.JSON(http.StatusNotFound, HttpResponse{
+			"error": session.SessionNotFoundError,
 		})
 		return
 	}
@@ -101,7 +97,7 @@ func uploadFiles(c *gin.Context) {
 	}
 	sessStr := string(jsonBytes)
 
-	err = client.Set(ctx, "sessionId:"+sess.ID, sessStr, time.Duration(sess.TimeToLive)*time.Minute).Err()
+	err = client.Set("sessionId:"+sess.ID, sessStr, sess.TimeToLive)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, HttpResponse{
 			"error": err.Error(),
