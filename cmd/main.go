@@ -60,33 +60,61 @@ func uploadFiles(c *gin.Context) {
 	defer client.Close()
 	ctx := context.Background()
 
-	form, _ := c.MultipartForm()
+	form, err := c.MultipartForm()
+	if err != nil {
+		c.JSON(http.StatusBadRequest, HttpResponse{
+			"error": err.Error(),
+		})
+		return
+	}
+
 	sessionId := form.Value["sessionId"][0]
 	files := form.File["files"]
 
-	for _, f := range files {
-		filename := sessionId + filepath.Base(f.Filename)
-		uploadDest := constants.UploadFileDest + filename
-		file := file.NewFile(filename, uploadDest)
-
-		jsonBytes, err := json.Marshal(file)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, HttpResponse{
-				"error": err.Error(),
+	val, err := client.Get(ctx, "sessionId:"+sessionId).Result()
+	if err != nil {
+		if val == "" {
+			c.JSON(http.StatusNotFound, HttpResponse{
+				"error": session.SessionNotFoundError,
 			})
 			return
 		}
-		fileStr := string(jsonBytes)
 
-		c.SaveUploadedFile(f, file.FileUrl)
-
-		err = client.Set(ctx, filename, fileStr, 0).Err()
-		if err != nil {
-			panic(err)
-		}
+		c.JSON(http.StatusInternalServerError, HttpResponse{
+			"error": err.Error(),
+		})
+		return
 	}
 
-	c.JSON(http.StatusOK, map[string]interface{}{
+	sess := session.Session{}
+	json.Unmarshal([]byte(val), &sess)
+
+	for _, f := range files {
+		filename := sessionId + "_" + filepath.Base(f.Filename)
+		uploadDest := constants.UploadFileDest + filename
+		file := file.NewFile(filename, uploadDest)
+		sess.AddFile(file)
+		c.SaveUploadedFile(f, file.FileUrl)
+	}
+
+	jsonBytes, err := json.Marshal(sess)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, HttpResponse{
+			"error": err.Error(),
+		})
+		return
+	}
+	sessStr := string(jsonBytes)
+
+	err = client.Set(ctx, "sessionId:"+sess.ID, sessStr, time.Duration(sess.TimeToLive)*time.Minute).Err()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, HttpResponse{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, HttpResponse{
 		"success":  "true",
 		"uploaded": len(files),
 	})
