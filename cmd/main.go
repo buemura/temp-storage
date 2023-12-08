@@ -10,27 +10,22 @@ import (
 	"github.com/buemura/temp-storage/internal/constants"
 	"github.com/buemura/temp-storage/internal/domain/file"
 	"github.com/buemura/temp-storage/internal/domain/session"
+	"github.com/buemura/temp-storage/internal/infra/cache"
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 )
 
 type HttpResponse map[string]interface{}
 
-// var client *redis.Client
-
 func main() {
-	// client = connectRedis()
-
 	router := gin.Default()
 	router.MaxMultipartMemory = 8 << 20 // 8 MiB
-
 	router.POST("/session", createSession)
 	router.POST("/upload", uploadFiles)
 	router.Run(":8080")
 }
 
 func createSession(c *gin.Context) {
-	client := connectRedis()
+	client := cache.ConnectRedis()
 	defer client.Close()
 	ctx := context.Background()
 
@@ -56,7 +51,7 @@ func createSession(c *gin.Context) {
 }
 
 func uploadFiles(c *gin.Context) {
-	client := connectRedis()
+	client := cache.ConnectRedis()
 	defer client.Close()
 	ctx := context.Background()
 
@@ -117,13 +112,5 @@ func uploadFiles(c *gin.Context) {
 	c.JSON(http.StatusOK, HttpResponse{
 		"success":  "true",
 		"uploaded": len(files),
-	})
-}
-
-func connectRedis() *redis.Client {
-	return redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "",
-		DB:       0,
 	})
 }
