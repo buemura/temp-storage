@@ -7,5 +7,7 @@ import (
 
 func SetupGinRoutes(router *gin.Engine) {
 	router.POST("/session", controllers.CreateSession)
+	router.GET("/session/:sessionId", controllers.GetSession)
+
 	router.POST("/upload", controllers.UploadFiles)
 }

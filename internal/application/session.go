@@ -44,3 +44,18 @@ func (ss *SessionService) CreateSession() (*session.Session, error) {
 	}
 	return sess, nil
 }
+
+func (ss *SessionService) UpdateSession(sess *session.Session) (*session.Session, error) {
+	jsonBytes, err := json.Marshal(sess)
+	if err != nil {
+		return nil, err
+	}
+	sessStr := string(jsonBytes)
+
+	err = ss.cacheStorage.Set("sessionId:"+sess.ID, sessStr, sess.TimeToLive)
+	if err != nil {
+		return nil, err
+	}
+
+	return sess, nil
+}

@@ -1,13 +1,12 @@
 package controllers
 
 import (
-	"encoding/json"
 	"net/http"
 	"path/filepath"
 
+	"github.com/buemura/temp-storage/internal/application"
 	"github.com/buemura/temp-storage/internal/constants"
 	"github.com/buemura/temp-storage/internal/domain/file"
-	"github.com/buemura/temp-storage/internal/domain/session"
 	"github.com/buemura/temp-storage/internal/infra/cache/redis"
 	"github.com/gin-gonic/gin"
 	r "github.com/redis/go-redis/v9"
@@ -20,6 +19,8 @@ func UploadFiles(c *gin.Context) {
 	client := redis.NewRedisCacheStorage(cli)
 	defer client.Close()
 
+	sService := application.NewSessionService(client)
+
 	form, err := c.MultipartForm()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HttpResponse{
@@ -31,16 +32,13 @@ func UploadFiles(c *gin.Context) {
 	sessionId := form.Value["sessionId"][0]
 	files := form.File["files"]
 
-	val := client.Get("sessionId:" + sessionId)
-	if val == "" {
-		c.JSON(http.StatusNotFound, HttpResponse{
-			"error": session.SessionNotFoundError,
+	sess, err := sService.GetSession(sessionId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, HttpResponse{
+			"error": err.Error(),
 		})
 		return
 	}
-
-	sess := session.Session{}
-	json.Unmarshal([]byte(val), &sess)
 
 	for _, f := range files {
 		filename := sessionId + "_" + filepath.Base(f.Filename)
@@ -50,25 +48,12 @@ func UploadFiles(c *gin.Context) {
 		c.SaveUploadedFile(f, file.FileUrl)
 	}
 
-	jsonBytes, err := json.Marshal(sess)
+	result, err := sService.UpdateSession(sess)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, HttpResponse{
+		c.JSON(http.StatusBadRequest, HttpResponse{
 			"error": err.Error(),
 		})
 		return
 	}
-	sessStr := string(jsonBytes)
-
-	err = client.Set("sessionId:"+sess.ID, sessStr, sess.TimeToLive)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, HttpResponse{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, HttpResponse{
-		"success":  "true",
-		"uploaded": len(files),
-	})
+	c.JSON(http.StatusOK, result)
 }
