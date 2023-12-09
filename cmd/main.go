@@ -8,8 +8,6 @@ import (
 func main() {
 	server := gin.Default()
 	server.MaxMultipartMemory = 8 << 20 // 8 MiB
-
 	routes.SetupGinRoutes(server)
-
 	server.Run(":8080")
 }

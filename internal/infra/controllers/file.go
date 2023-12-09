@@ -7,20 +7,20 @@ import (
 	"github.com/buemura/temp-storage/internal/application"
 	"github.com/buemura/temp-storage/internal/constants"
 	"github.com/buemura/temp-storage/internal/domain/file"
-	"github.com/buemura/temp-storage/internal/infra/cache/redis"
 	"github.com/gin-gonic/gin"
-	r "github.com/redis/go-redis/v9"
 )
 
-func UploadFiles(c *gin.Context) {
-	cli := r.NewClient(&r.Options{
-		Addr: "localhost:6379",
-	})
-	client := redis.NewRedisCacheStorage(cli)
-	defer client.Close()
+type FileController struct {
+	sService *application.SessionService
+}
 
-	sService := application.NewSessionService(client)
+func NewFileController(sService *application.SessionService) *FileController {
+	return &FileController{
+		sService: sService,
+	}
+}
 
+func (fs *FileController) UploadFiles(c *gin.Context) {
 	form, err := c.MultipartForm()
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HttpResponse{
@@ -32,7 +32,7 @@ func UploadFiles(c *gin.Context) {
 	sessionId := form.Value["sessionId"][0]
 	files := form.File["files"]
 
-	sess, err := sService.GetSession(sessionId)
+	sess, err := fs.sService.GetSession(sessionId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HttpResponse{
 			"error": err.Error(),
@@ -48,7 +48,7 @@ func UploadFiles(c *gin.Context) {
 		c.SaveUploadedFile(f, file.FileUrl)
 	}
 
-	result, err := sService.UpdateSession(sess)
+	result, err := fs.sService.UpdateSession(sess)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HttpResponse{
 			"error": err.Error(),

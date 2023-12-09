@@ -4,22 +4,22 @@ import (
 	"net/http"
 
 	"github.com/buemura/temp-storage/internal/application"
-	"github.com/buemura/temp-storage/internal/infra/cache/redis"
 	"github.com/gin-gonic/gin"
-	r "github.com/redis/go-redis/v9"
 )
 
-func GetSession(c *gin.Context) {
-	cli := r.NewClient(&r.Options{
-		Addr: "localhost:6379",
-	})
-	client := redis.NewRedisCacheStorage(cli)
-	defer client.Close()
+type SessionController struct {
+	sService *application.SessionService
+}
 
+func NewSessionController(sService *application.SessionService) *SessionController {
+	return &SessionController{
+		sService: sService,
+	}
+}
+
+func (ss *SessionController) GetSession(c *gin.Context) {
 	sessionId := c.Param("sessionId")
-
-	sService := application.NewSessionService(client)
-	sess, err := sService.GetSession(sessionId)
+	sess, err := ss.sService.GetSession(sessionId)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, HttpResponse{
 			"error": err.Error(),
@@ -29,21 +29,13 @@ func GetSession(c *gin.Context) {
 	c.JSON(http.StatusOK, sess)
 }
 
-func CreateSession(c *gin.Context) {
-	cli := r.NewClient(&r.Options{
-		Addr: "localhost:6379",
-	})
-	client := redis.NewRedisCacheStorage(cli)
-	defer client.Close()
-
-	sService := application.NewSessionService(client)
-	sess, err := sService.CreateSession()
+func (ss *SessionController) CreateSession(c *gin.Context) {
+	sess, err := ss.sService.CreateSession()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, HttpResponse{
 			"error": err.Error(),
 		})
 		return
 	}
-
 	c.JSON(http.StatusCreated, sess)
 }
